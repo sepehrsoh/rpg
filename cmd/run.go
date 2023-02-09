@@ -7,7 +7,7 @@ import (
 
 var (
 	Target     string
-	LocalPort  int
+	LocalPort  *[]int
 	TargetPort int
 	run        = &cobra.Command{
 		Use: "run [src]",

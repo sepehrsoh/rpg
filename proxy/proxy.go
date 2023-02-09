@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"context"
 	"fmt"
 	"github.com/sirupsen/logrus"
 	"io"
@@ -12,43 +13,57 @@ import (
 )
 
 type ReversArgs struct {
-	LocalPort int
+	LocalPort *[]int
 	HostPort  int
 	Target    string
 }
 
-func NewReversArgs(localPort int, hostPort int, target string) *ReversArgs {
+func NewReversArgs(localPort *[]int, hostPort int, target string) *ReversArgs {
 	return &ReversArgs{LocalPort: localPort, HostPort: hostPort, Target: target}
 }
 
 func ReverseProxy(args *ReversArgs) {
-	logrus.Infof("start server with target %v:%v \n Listen on port : %v", args.Target, args.HostPort, args.LocalPort)
-	incoming, err := net.Listen("tcp", fmt.Sprintf(":%d", args.LocalPort))
-	if err != nil {
-		log.Fatalf("could not start server on %d: %v", args.LocalPort, err)
-	}
 	c := make(chan os.Signal)
-	signal.Notify(c, syscall.SIGTERM, syscall.SIGINT, syscall.SIGKILL)
-	for {
-		select {
-		case <-c:
-			logrus.Infoln("Shutting Down...")
-			return
-		default:
-			client, err := incoming.Accept()
-			if err != nil {
-				log.Fatal("could not accept client connection", err)
-			}
-			defer client.Close()
-
-			target, err := net.Dial("tcp", fmt.Sprintf("%v:%v", args.Target, args.HostPort))
-			if err != nil {
-				log.Fatal("could not connect to target", err)
-			}
-			defer target.Close()
-			go func() { io.Copy(target, client) }()
-			go func() { io.Copy(client, target) }()
+	signal.Notify(c, syscall.SIGQUIT)
+	signal.Notify(c, syscall.SIGKILL)
+	signal.Notify(c, syscall.SIGTERM)
+	signal.Notify(c, syscall.SIGINT)
+	ctx, canFu := context.WithCancel(context.Background())
+	go func() {
+		<-c
+		canFu()
+	}()
+	for _, port := range *args.LocalPort {
+		logrus.Infof("start server with target %v:%v \n Listen on port : %v", args.Target, args.HostPort, port)
+		incoming, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+		if err != nil {
+			log.Fatalf("could not start server on %d: %v", args.LocalPort, err)
 		}
+		go func(incoming net.Listener) {
+			for {
+				select {
+				case <-ctx.Done():
+					logrus.Infoln("Shutting Down...")
+					break
+				default:
+					client, err := incoming.Accept()
+					if err != nil {
+						log.Println("could not accept client connection", err)
+						break
+					}
+					defer client.Close()
+					target, err := net.Dial("tcp", fmt.Sprintf("%v:%v", args.Target, args.HostPort))
+					if err != nil {
+						log.Println("could not connect to target", err)
+						break
+					}
+					defer target.Close()
+					go func() { io.Copy(target, client) }()
+					go func() { io.Copy(client, target) }()
+				}
+			}
+		}(incoming)
 	}
+	<-ctx.Done()
 
 }

@@ -16,8 +16,8 @@ func Execute() {
 
 func init() {
 	rootCmd.AddCommand(run)
-	run.PersistentFlags().StringVarP(&Target, "target", "t", "", "target host")
-	run.MarkFlagRequired("target")
-	run.Flags().IntVarP(&LocalPort, "port", "p", 8080, "local port")
-	run.Flags().IntVarP(&TargetPort, "targetPort", "i", 8080, "target port")
+	run.PersistentFlags().StringVarP(&Target, "ip", "i", "0.0.0.0", "target ip")
+	run.MarkFlagRequired("ip")
+	LocalPort = run.Flags().IntSliceP("from", "f", []int{8080}, "--from 80,443")
+	run.Flags().IntVarP(&TargetPort, "to", "t", 8080, "--to 443")
 }

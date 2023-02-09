@@ -34,12 +34,16 @@ func ReverseProxy(args *ReversArgs) {
 		canFu()
 	}()
 	for _, port := range *args.LocalPort {
-		logrus.Infof("start server with target %v:%v \n Listen on port : %v", args.Target, args.HostPort, port)
+		var targetPort = args.HostPort
+		if targetPort == 0 {
+			targetPort = port
+		}
+		logrus.Infof("start server with target %v:%v \n Listen on port : %v", args.Target, targetPort, port)
 		incoming, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 		if err != nil {
 			log.Fatalf("could not start server on %d: %v", args.LocalPort, err)
 		}
-		go func(incoming net.Listener) {
+		go func(incoming net.Listener, targetPort int) {
 			for {
 				select {
 				case <-ctx.Done():
@@ -52,7 +56,7 @@ func ReverseProxy(args *ReversArgs) {
 						break
 					}
 					defer client.Close()
-					target, err := net.Dial("tcp", fmt.Sprintf("%v:%v", args.Target, args.HostPort))
+					target, err := net.Dial("tcp", fmt.Sprintf("%v:%v", args.Target, targetPort))
 					if err != nil {
 						log.Println("could not connect to target", err)
 						break
@@ -62,7 +66,7 @@ func ReverseProxy(args *ReversArgs) {
 					go func() { io.Copy(client, target) }()
 				}
 			}
-		}(incoming)
+		}(incoming, targetPort)
 	}
 	<-ctx.Done()
 

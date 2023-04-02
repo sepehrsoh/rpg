@@ -24,7 +24,7 @@ func NewReversArgs(localPort *[]int, hostPort int, target string) *ReversArgs {
 }
 
 func ReverseProxy(args *ReversArgs) {
-	c := make(chan os.Signal)
+	c := make(chan os.Signal, 1)
 	signal.Notify(c, syscall.SIGQUIT)
 	signal.Notify(c, syscall.SIGKILL)
 	signal.Notify(c, syscall.SIGTERM)
@@ -42,7 +42,7 @@ func ReverseProxy(args *ReversArgs) {
 		logrus.Infof("start server with target %v:%v \n Listen on port : %v", args.Target, targetPort, port)
 		incoming, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 		if err != nil {
-			logrus.Errorln("could not start server on %d: %v", args.LocalPort, err)
+			logrus.Errorf("could not start server on %d: %v", args.LocalPort, err)
 		}
 		go func(incoming net.Listener, targetPort int) {
 			for {

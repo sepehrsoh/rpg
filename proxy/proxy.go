@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 )
 
@@ -41,7 +42,7 @@ func ReverseProxy(args *ReversArgs) {
 		logrus.Infof("start server with target %v:%v \n Listen on port : %v", args.Target, targetPort, port)
 		incoming, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 		if err != nil {
-			log.Fatalf("could not start server on %d: %v", args.LocalPort, err)
+			logrus.Errorln("could not start server on %d: %v", args.LocalPort, err)
 		}
 		go func(incoming net.Listener, targetPort int) {
 			for {
@@ -55,15 +56,38 @@ func ReverseProxy(args *ReversArgs) {
 						log.Println("could not accept client connection", err)
 						break
 					}
-					defer client.Close()
+
 					target, err := net.Dial("tcp", fmt.Sprintf("%v:%v", args.Target, targetPort))
 					if err != nil {
 						log.Println("could not connect to target", err)
 						break
 					}
-					defer target.Close()
-					go func() { io.Copy(target, client) }()
-					go func() { io.Copy(client, target) }()
+					wait := &sync.WaitGroup{}
+					go func() {
+						wait.Add(1)
+						defer wait.Done()
+						_, err := io.Copy(target, client)
+						if err != nil {
+							logrus.Errorln(err)
+						}
+					}()
+					go func() {
+						wait.Add(1)
+						defer wait.Done()
+						_, err := io.Copy(client, target)
+						if err != nil {
+							logrus.Errorln(err)
+						}
+					}()
+					wait.Wait()
+					err = client.Close()
+					if err != nil {
+						logrus.Errorln(err)
+					}
+					err = target.Close()
+					if err != nil {
+						logrus.Errorln(err)
+					}
 				}
 			}
 		}(incoming, targetPort)

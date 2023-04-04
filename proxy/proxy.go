@@ -61,7 +61,6 @@ func ReverseProxy(args *ReversArgs) {
 						log.Println("could not connect to target", err)
 						break
 					}
-					defer target.Close()
 					go func() {
 						_, err = io.Copy(target, client)
 						if err != nil {

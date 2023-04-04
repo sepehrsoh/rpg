@@ -9,7 +9,6 @@ import (
 	"net"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 )
 
@@ -62,32 +61,19 @@ func ReverseProxy(args *ReversArgs) {
 						log.Println("could not connect to target", err)
 						break
 					}
-					wait := &sync.WaitGroup{}
+					defer target.Close()
 					go func() {
-						wait.Add(1)
-						defer wait.Done()
-						_, err := io.Copy(target, client)
+						_, err = io.Copy(target, client)
 						if err != nil {
-							logrus.Errorln(err)
+							logrus.Errorln("err client to target : ", err)
 						}
 					}()
 					go func() {
-						wait.Add(1)
-						defer wait.Done()
-						_, err := io.Copy(client, target)
+						_, err = io.Copy(client, target)
 						if err != nil {
-							logrus.Errorln(err)
+							logrus.Errorln("err target to client : ", err)
 						}
 					}()
-					wait.Wait()
-					err = client.Close()
-					if err != nil {
-						logrus.Errorln(err)
-					}
-					err = target.Close()
-					if err != nil {
-						logrus.Errorln(err)
-					}
 				}
 			}
 		}(incoming, targetPort)

@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 )
 
@@ -55,15 +56,25 @@ func ReverseProxy(args *ReversArgs) {
 						log.Println("could not accept client connection", err)
 						break
 					}
-					defer client.Close()
 					target, err := net.Dial("tcp", fmt.Sprintf("%v:%v", args.Target, targetPort))
 					if err != nil {
 						log.Println("could not connect to target", err)
 						break
 					}
-					defer target.Close()
-					go func() { io.Copy(target, client) }()
-					go func() { io.Copy(client, target) }()
+					wait := &sync.WaitGroup{}
+					go func() {
+						wait.Add(1)
+						_, _ = io.Copy(target, client)
+						wait.Done()
+					}()
+					go func() {
+						wait.Add(1)
+						_, _ = io.Copy(client, target)
+						wait.Done()
+					}()
+					wait.Wait()
+					_ = target.Close()
+					_ = client.Close()
 				}
 			}
 		}(incoming, targetPort)
